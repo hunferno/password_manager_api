@@ -13,6 +13,12 @@ register = async (req, res) => {
     charset: "numeric",
   });
 
+  const code = jwt.sign(
+    { verificationCode: randomString },
+    process.env.JWT_SECRET_TOKEN,
+    { expiresIn: "15m" }
+  );
+
   try {
     //user existant ?
     const existingUser = await UserModel.findOne({ email });
@@ -25,7 +31,7 @@ register = async (req, res) => {
       const user = await UserModel.create({
         email,
         password: hashedPassword,
-        verificationCode: randomString,
+        verificationCode: code,
       });
 
       if (!user) {
@@ -36,17 +42,46 @@ register = async (req, res) => {
       }
 
       mailerService(email, randomString, res);
-    } else if (existingUser.verificationCode !== "") {
+    } else if (existingUser.verificationCode.length > 1) {
+      //Check code validity
+      const decodedCode = jwt.verify(
+        existingUser.verificationCode,
+        process.env.JWT_SECRET_TOKEN,
+        (err, info) => {
+          if (err) return false;
+          return info;
+        }
+      );
+
+      if (!decodedCode) {
+        // update user in db
+        UserModel.findByIdAndUpdate(
+          { _id: existingUser._id },
+          { $set: { verificationCode: code } },
+          { new: true }
+        ).then(() => {
+          // Send new verification code
+          mailerService(email, randomString, res);
+        });
+        return;
+      }
+      // Resend verification existing code
+      mailerService(email, decodedCode.verificationCode, res);
+    } else if (existingUser.verificationCode === null) {
       //psw crypt
       const salt = await bcrypt.genSalt();
       hashedPassword = await bcrypt.hash(password, salt);
 
       // update user in db
-      await UserModel.findByIdAndUpdate(existingUser._id, {
-        email,
-        password: hashedPassword,
-        verificationCode: randomString,
-      });
+      await UserModel.findByIdAndUpdate(
+        existingUser._id,
+        {
+          email,
+          password: hashedPassword,
+          verificationCode: code,
+        },
+        { new: true }
+      );
 
       mailerService(email, randomString, res);
     } else {
@@ -61,33 +96,126 @@ register = async (req, res) => {
 };
 
 registerVerification = async (req, res) => {
-  const { email, verificationCode } = req.body;
+  const { email, receivedCode } = req.body;
 
   try {
-    const user = await UserModel.findOne({ email });
+    //user existant ?
+    const existingUser = await UserModel.findOne({ email });
 
-    if (!user) {
+    if (!existingUser) {
       res.status(403).json({ message: "Email non reconnu" });
       return;
-    }
-
-    // verfication code
-    if (user.verificationCode === null) {
+    } else if (
+      existingUser.verificationCode === "" ||
+      existingUser.verificationCode === null
+    ) {
       res.status(403).json({
-        message: "Il n'y a pas de vérification à effectuer",
+        message: "Votre compte est déjà vérifié",
       });
       return;
-    } else if (user.verificationCode !== verificationCode) {
-      res.json({ message: "Mauvais code de vérification", status: 403 });
+    }
+
+    // decode received code
+    const decodedCode = jwt.verify(
+      existingUser.verificationCode,
+      process.env.JWT_SECRET_TOKEN,
+      (err, info) => {
+        if (err) return false;
+        return info;
+      }
+    );
+
+    if (!decodedCode) {
+      return res.status(401).json({
+        message: "Le code a expiré. Veuillez recommencez la procédure",
+      });
+    }
+
+    // check if received code is valid
+    if (decodedCode.verificationCode === receivedCode) {
+      // update user in db
+      await UserModel.updateOne({ email }, { $set: { verificationCode: "" } });
+      res.status(201).json({ message: "Votre compte est maintenant actif" });
+      return;
+    } else {
+      res.status(403).json({ message: "Mauvais code de vérification" });
+      return;
+    }
+  } catch (error) {
+    res.status(500).json({
+      error,
+      message: "Une erreur s'est produite lors de la vérification du code",
+    });
+  }
+};
+
+resendVerificationCode = async (req, res) => {
+  const { email } = req.body;
+
+  try {
+    //user existant ?
+    const existingUser = await UserModel.findOne({ email });
+
+    if (!existingUser) {
+      res.status(403).json({ message: "Email non reconnu" });
+      return;
+    } else if (existingUser.verificationCode === null) {
+      res.status(403).json({
+        message: "Votre compte n'existe pas",
+      });
       return;
     }
 
-    // reset verificationCode in user
-    await UserModel.findByIdAndUpdate(
-      { _id: user._id },
-      { $set: { verificationCode: "" } }
+    // generate OPT Code with 6 characters
+    const randomString = randomstring.generate({
+      length: 6,
+      charset: "numeric",
+    });
+
+    //hash new verification code
+    const newCode = jwt.sign(
+      { verificationCode: randomString },
+      process.env.JWT_SECRET_TOKEN,
+      { expiresIn: "15m" }
     );
-    res.json({ user: user._id });
+
+    // check if user has waiting verification code
+    if (existingUser.verificationCode.length > 0) {
+      // decode received code
+      const decodedCode = jwt.verify(
+        existingUser.verificationCode,
+        process.env.JWT_SECRET_TOKEN,
+        (err, info) => {
+          if (err) {
+            // update user in db
+            UserModel.findByIdAndUpdate(
+              { _id: userToUpdate._id },
+              { $set: { verificationCode: newCode } },
+              { new: true }
+            ).then(() => {
+              // Send new verification code
+              mailerService(email, randomString, res);
+            });
+          }
+          return info;
+        }
+      );
+
+      // Resend verification existing code
+      mailerService(email, decodedCode.verificationCode, res);
+    } else {
+      // Send new verification code
+      mailerService(email, randomString, res);
+
+      // update user in db
+      await UserModel.findByIdAndUpdate(
+        existingUser._id,
+        {
+          verificationCode: newCode,
+        },
+        { new: true }
+      );
+    }
   } catch (error) {
     res.status(500).json({
       error,
@@ -102,10 +230,10 @@ isEmailExistsInDB = async (req, res) => {
   try {
     const user = await UserModel.findOne({ email });
 
-    if (user) {
+    if (user && user.verificationCode == "") {
       res.status(200).json({ isExist: true });
     } else {
-      res.status(400).json({ isExist: false });
+      res.status(200).json({ isExist: false });
     }
   } catch (error) {
     res.status(500).json({
@@ -143,7 +271,7 @@ login = async (req, res) => {
       const token = jwt.sign(
         { userId: existingUser._id },
         process.env.JWT_SECRET_TOKEN,
-        { expiresIn: "30d" }
+        { expiresIn: "15d" }
       );
 
       //Suppression du password dans la réponse
@@ -151,11 +279,12 @@ login = async (req, res) => {
 
       const userInfo = { ...existingUser._doc, jwt: token };
 
-      res.json({
+      res.status(200).json({
         userInfo,
       });
     } else {
       res.status(403).json({ message: "Email non reconnu" });
+      return;
     }
   } catch (error) {
     res.status(500).json({
@@ -166,117 +295,34 @@ login = async (req, res) => {
   }
 };
 
-// forgotPassword = async (req, res) => {
-//   const { email } = req.body;
+resetPassword = async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    // find user by email
+    const userToUpdate = await UserModel.findOne({ email });
 
-//   try {
-//     //user existant ?
-//     const user = await UserModel.findOne({ email });
+    if (!userToUpdate) {
+      res.json({ status: 403, message: "Email non reconnu" });
+      return;
+    }
 
-//     if (user) {
-//       //generate rdm string
-//       const randomString = randomstring.generate(8);
-//       // apply JWT for making expired token
-//       const forgotPasswordJWT = jwt.sign(
-//         { forgotPassword: randomString },
-//         process.env.JWT_SECRET_TOKEN,
-//         { expiresIn: "15m" }
-//       );
-//       // update user psw token
-//       const data = await UserModel.updateOne(
-//         { email },
-//         { $set: { resetPasswordToken: forgotPasswordJWT } }
-//       );
-//       // create transporter
-//       const transporter = nodemailer.createTransport({
-//         host: process.env.HOST_TRANSPORT,
-//         port: process.env.TLS_PORT_TRANSPORT,
-//         secure: false,
-//         requireTLS: true,
-//         auth: {
-//           user: process.env.EMAIL_TRANSPORT,
-//           pass: process.env.PASSWORD_TRANSPORT,
-//         },
-//       });
+    // hash pass before storing in db
+    const salt = await bcrypt.genSalt();
+    hashedPassword = await bcrypt.hash(password, salt);
 
-//       //create transport options
-//       const mailOptions = {
-//         from: process.env.EMAIL_TRANSPORT,
-//         to: user.email,
-//         subject: "Reset password",
-//         html: `<p><b>Bonjour ${user.pseudo},</b>
-//       <br/>
-//       <br/>
-//       Vous avez récemment demandé le renouvellement de votre mot de passe.
-//       Veuillez copier le code ci-dessous et le coller dans votre application :
-//       <br/>
-//       <br/>
-//       <b>${randomString}</b>
-//       <br/>
-//       <br/>
-//       Ce code a un délai d'expiration de 15mn, au delà duquel vous devrez recommencer le processus.
-//       <br/>
-//       <br/>
-//       Cordialement,
-//       <br/>
-//       L'équipe Tontimillion
-//       </p>`,
-//       };
-
-//       // sending email
-//       transporter.sendMail(mailOptions, (err, info) => {
-//         if (err)
-//           return res.json({
-//             message: "Something wrong with the process",
-//             status: 404,
-//           });
-//         return res.json({
-//           message: "Please check your inbox of email",
-//           status: 200,
-//         });
-//       });
-//     } else {
-//       res.json({ message: "Unknown user email", status: 403 });
-//     }
-//   } catch (err) {
-//     res.json({ err, status: 500 });
-//   }
-// };
-
-// resetPassword = async (req, res) => {
-//   try {
-//     const { email, password } = req.body;
-//     // find user by token
-//     const userToUpdate = await UserModel.findOne({ email });
-
-//     if (userToUpdate) {
-//       //check if token still validate
-//       jwt.verify(
-//         userToUpdate.resetPasswordToken,
-//         process.env.JWT_SECRET_TOKEN,
-//         (err, _) => {
-//           if (err) return res.json({ status: 401, message: "Expired token" });
-//         }
-//       );
-
-//       // hash pass before storing in db
-//       const salt = await bcrypt.genSalt();
-//       hashedPassword = await bcrypt.hash(password, salt);
-
-//       // save pass in user
-//       await UserModel.findByIdAndUpdate(
-//         { _id: userToUpdate._id },
-//         { $set: { password: hashedPassword, resetPasswordToken: "" } },
-//         { new: true }
-//       );
-//       res.json({ status: 201, message: "Password updated" });
-//     } else {
-//       res.json({ status: 401, message: "Unknown or Expired Token" });
-//     }
-//   } catch (err) {
-//     res.json({ err, status: 500 });
-//   }
-// };
+    // save pass in user
+    await UserModel.findByIdAndUpdate(
+      { _id: userToUpdate._id },
+      { $set: { password: hashedPassword } },
+      { new: true }
+    );
+    res.status(201).json({ message: "Mot de passe mis à jour" });
+  } catch (err) {
+    res
+      .status(500)
+      .json({ message: "La réinitialisation du mot de passe à écouhé" });
+  }
+};
 
 logout = async (req, res) => {
   res.clearCookie("jwt");
@@ -285,26 +331,17 @@ logout = async (req, res) => {
 
 verifyTokenValidity = async (req, res) => {
   try {
-    const { token, email } = req.body;
-    const user = await UserModel.findOne({ email });
-    if (user) {
-      //  check if user token is valid
-      const userToken = user.resetPasswordToken;
-      jwt.verify(userToken, process.env.JWT_SECRET_TOKEN, (err, validToken) => {
-        if (err)
-          return res
-            .status(401)
-            .json({ status: 401, message: "Expired token" });
-        // compare usertoken & token sent by user
-        if (validToken.forgotPassword !== token.trim())
-          return res
-            .status(401)
-            .json({ status: 401, message: "Expired token" });
-        else return res.json({ message: "Valid token" });
-      });
-    } else {
-      res.status(403).json({ message: "Unknown user email" });
-    }
+    const { token } = req.body;
+    // const user = await UserModel.findOne({ email });
+    if (!token) return res.status(401).json({ message: "No token provided" });
+
+    //  check if user token is valid
+    jwt.verify(token, process.env.JWT_SECRET_TOKEN, (err, _) => {
+      if (err)
+        return res.status(401).json({ status: 401, message: "Expired token" });
+
+      return res.status(200).json({ message: "Valid token" });
+    });
   } catch (err) {
     res.status(500).json({ message: "Check validity token failed" });
   }
@@ -313,10 +350,10 @@ verifyTokenValidity = async (req, res) => {
 module.exports = {
   register,
   registerVerification,
+  resendVerificationCode,
   isEmailExistsInDB,
   login,
-  //   forgotPassword,
-  //   resetPassword,
+  verifyTokenValidity,
+  resetPassword,
   logout,
-  //   verifyTokenValidity,
 };

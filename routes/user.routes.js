@@ -9,10 +9,10 @@ const router = express.Router();
 router.post("/register", authController.register);
 router.post("/register/verification", authController.registerVerification);
 router.post("/isEmailExistsInDB", authController.isEmailExistsInDB);
+router.post("/resendVerificationCode", authController.resendVerificationCode);
 router.post("/login", authController.login);
-// router.post("/forgot_password", authController.forgotPassword);
-// router.post("/reset_password", authController.resetPassword);
-// router.post("/verify_token_validity", authController.verifyTokenValidity);
+router.post("/verify_token_validity", authController.verifyTokenValidity);
+router.post("/reset_password", authController.resetPassword);
 router.get("/logout", authController.logout);
 
 //R-U-D

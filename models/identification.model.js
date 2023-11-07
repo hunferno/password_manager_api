@@ -20,10 +20,6 @@ const identificationSchema = new mongoose.Schema(
       max: 1024,
       minLength: 8,
     },
-    password_strength: {
-      type: String,
-      required: true,
-    },
   },
   {
     timestamps: true,
