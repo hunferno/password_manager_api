@@ -2,7 +2,20 @@ const mongoose = require("mongoose");
 
 const identificationSchema = new mongoose.Schema(
   {
-    website: {
+    name: {
+      type: String,
+      required: true,
+      lowercase: true,
+      trimp: true,
+    },
+    category: {
+      type: String,
+      required: false,
+      lowercase: true,
+      trimp: true,
+      default: "Autre",
+    },
+    url: {
       type: String,
       required: true,
       lowercase: true,
@@ -19,6 +32,10 @@ const identificationSchema = new mongoose.Schema(
       required: true,
       max: 1024,
       minLength: 8,
+    },
+    twoFACode: {
+      type: String,
+      default: null,
     },
   },
   {
