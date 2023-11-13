@@ -10,6 +10,7 @@ createIdentification = async (req, res) => {
 
   try {
     const newIdentification = await IdentificationModel.create({
+      userId: res.userId,
       name,
       category,
       url,
@@ -37,8 +38,10 @@ createIdentification = async (req, res) => {
 };
 
 getAllIdentifications = async (_, res) => {
+  const userId = res.userId;
+
   try {
-    const identifications = await IdentificationModel.find();
+    const identifications = await IdentificationModel.find({ userId: userId });
     res.status(200).json(identifications);
   } catch (err) {
     res.status(500).json({
@@ -90,6 +93,7 @@ updateIdentificationById = async (req, res) => {
 
 deleteIdentificationById = async (req, res) => {
   const { id } = req.params;
+  console.log("id", id);
 
   try {
     const deletedIdentification = await IdentificationModel.findByIdAndDelete({

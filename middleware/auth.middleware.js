@@ -2,6 +2,7 @@ const UserModel = require("../models/user.model");
 const jwt = require("jsonwebtoken");
 
 checkUserAuth = async (req, res, next) => {
+  console.log("enter in call");
   const token = req.headers.authorization.split(" ")[1];
 
   if (token) {
@@ -17,6 +18,7 @@ checkUserAuth = async (req, res, next) => {
           let user = await UserModel.findById(decodedToken.userId);
           //   res.locals.user = user;
           if (user._id.toString() === decodedToken.userId) {
+            res.userId = decodedToken.userId;
             next();
           } else {
             res.status(401).json({

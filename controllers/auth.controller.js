@@ -271,7 +271,7 @@ login = async (req, res) => {
       const token = jwt.sign(
         { userId: existingUser._id },
         process.env.JWT_SECRET_TOKEN,
-        { expiresIn: "15m" }
+        { expiresIn: "15d" }
       );
 
       //Suppression du password dans la réponse

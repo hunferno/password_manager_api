@@ -2,6 +2,10 @@ const mongoose = require("mongoose");
 
 const identificationSchema = new mongoose.Schema(
   {
+    userId: {
+      type: mongoose.Types.ObjectId,
+      ref: "user",
+    },
     name: {
       type: String,
       required: true,
