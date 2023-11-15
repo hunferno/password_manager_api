@@ -15,6 +15,11 @@ router.get(
   middleware.checkUserAuth,
   identificationController.getAllIdentifications
 );
+router.get(
+  "/search/:term",
+  middleware.checkUserAuth,
+  identificationController.searchItems
+);
 router.patch(
   "/update/:id",
   middleware.checkUserAuth,

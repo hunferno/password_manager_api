@@ -50,6 +50,35 @@ getAllIdentifications = async (_, res) => {
   }
 };
 
+searchItems = async (req, res) => {
+  const userId = res.userId;
+  const { term } = req.params;
+
+  if (term.length < 3) {
+    res.status(400).json({
+      message:
+        "La recherche doit contenir au moins 3 caractères pour être validée",
+    });
+    return;
+  }
+
+  try {
+    const identifications = await IdentificationModel.find({
+      userId: userId,
+      $or: [
+        { name: { $regex: term, $options: "i" } },
+        { url: { $regex: term, $options: "i" } },
+        { username: { $regex: term, $options: "i" } },
+      ],
+    });
+    res.status(200).json(identifications);
+  } catch (err) {
+    res.status(500).json({
+      message: "Une erreur est survenue lors de la récupération des données",
+    });
+  }
+};
+
 updateIdentificationById = async (req, res) => {
   const { id } = req.params;
   const { name, category, url, username, password, twoFACode } = req.body;
@@ -93,7 +122,6 @@ updateIdentificationById = async (req, res) => {
 
 deleteIdentificationById = async (req, res) => {
   const { id } = req.params;
-  console.log("id", id);
 
   try {
     const deletedIdentification = await IdentificationModel.findByIdAndDelete({
@@ -121,6 +149,7 @@ deleteIdentificationById = async (req, res) => {
 module.exports = {
   createIdentification,
   getAllIdentifications,
+  searchItems,
   updateIdentificationById,
   deleteIdentificationById,
 };
