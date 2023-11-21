@@ -1,12 +1,9 @@
+const { encrypt, decrypt } = require("../lib/services/cryptoServices");
 const IdentificationModel = require("../models/identification.model");
-const bcrypt = require("bcrypt");
-const jwt = require("jsonwebtoken");
 
 createIdentification = async (req, res) => {
   const { name, category, url, username, password, twoFACode } = req.body;
-
-  const salt = await bcrypt.genSalt();
-  const cryptedPassword = await bcrypt.hash(password, salt);
+  const { iv, encrypted } = encrypt(password);
 
   try {
     const newIdentification = await IdentificationModel.create({
@@ -15,7 +12,8 @@ createIdentification = async (req, res) => {
       category,
       url,
       username,
-      password: cryptedPassword,
+      password: encrypted,
+      iv,
       twoFACode,
     });
 
@@ -42,6 +40,12 @@ getAllIdentifications = async (_, res) => {
 
   try {
     const identifications = await IdentificationModel.find({ userId: userId });
+    identifications.map((identification) => {
+      identification.password = decrypt(
+        identification.password,
+        identification.iv
+      );
+    });
     res.status(200).json(identifications);
   } catch (err) {
     res.status(500).json({
@@ -82,9 +86,7 @@ searchItems = async (req, res) => {
 updateIdentificationById = async (req, res) => {
   const { id } = req.params;
   const { name, category, url, username, password, twoFACode } = req.body;
-
-  const salt = await bcrypt.genSalt();
-  const cryptedPassword = await bcrypt.hash(password, salt);
+  const { iv, encrypted } = encrypt(password);
 
   try {
     const updatedIdentification = await IdentificationModel.findByIdAndUpdate(
@@ -95,7 +97,8 @@ updateIdentificationById = async (req, res) => {
           category,
           url,
           username,
-          password: cryptedPassword,
+          password: encrypted,
+          iv,
           twoFACode,
         },
       },

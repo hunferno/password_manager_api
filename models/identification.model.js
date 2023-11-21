@@ -37,6 +37,10 @@ const identificationSchema = new mongoose.Schema(
       max: 1024,
       minLength: 8,
     },
+    iv: {
+      type: String,
+      default: null,
+    },
     twoFACode: {
       type: String,
       default: null,
