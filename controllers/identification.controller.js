@@ -40,6 +40,13 @@ getAllIdentifications = async (_, res) => {
 
   try {
     const identifications = await IdentificationModel.find({ userId: userId });
+    if (!identifications) {
+      res.status(401).json({
+        message: "La récupération des identifications a échoué",
+      });
+      return;
+    }
+
     identifications.map((identification) => {
       identification.password = decrypt(
         identification.password,
@@ -75,10 +82,17 @@ searchItems = async (req, res) => {
         { username: { $regex: term, $options: "i" } },
       ],
     });
+    if (!identifications) {
+      res.status(401).json({
+        message: "La recherche des identifications a échoué",
+      });
+      return;
+    }
+
     res.status(200).json(identifications);
   } catch (err) {
     res.status(500).json({
-      message: "Une erreur est survenue lors de la récupération des données",
+      message: "Une erreur est survenue lors de la recherche des données",
     });
   }
 };
