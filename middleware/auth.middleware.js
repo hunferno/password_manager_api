@@ -15,7 +15,7 @@ checkUserAuth = async (req, res, next) => {
         } else {
           let user = await UserModel.findById(decodedToken.userId);
           //   res.locals.user = user;
-          if (user._id.toString() === decodedToken.userId) {
+          if (user?._id.toString() === decodedToken.userId) {
             res.userId = decodedToken.userId;
             next();
           } else {

@@ -189,7 +189,7 @@ resendVerificationCode = async (req, res) => {
           if (err) {
             // update user in db
             UserModel.findByIdAndUpdate(
-              { _id: userToUpdate._id },
+              { _id: existingUser._id },
               { $set: { verificationCode: newCode } },
               { new: true }
             ).then(() => {
