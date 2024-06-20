@@ -16,6 +16,13 @@ const securetextSchema = new mongoose.Schema(
       trimp: true,
       default: "Aucun texte n'a été saisi",
     },
+    category: {
+      type: String,
+      required: false,
+      lowercase: true,
+      trimp: true,
+      default: "Autre",
+    },
     iv: {
       type: String,
       default: null,

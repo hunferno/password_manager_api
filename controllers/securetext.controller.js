@@ -2,7 +2,7 @@ const { encrypt, decrypt } = require("../lib/services/cryptoServices");
 const SecuretextModel = require("../models/securetext.model");
 
 createSecureText = async (req, res) => {
-  const { title, text } = req.body;
+  const { title, text, category } = req.body;
   let iv = null;
   let encrypted = null;
 
@@ -17,6 +17,7 @@ createSecureText = async (req, res) => {
       userId: res.userId,
       title,
       text: encrypted,
+      category,
       iv,
     });
 
@@ -51,7 +52,9 @@ getAllSecureTexts = async (_, res) => {
     }
 
     secureTexts.map((note) => {
-      note.text = decrypt(note.text, note.iv);
+      if (note.text) {
+        note.text = decrypt(note.text, note.iv);
+      }
     });
     res.status(200).json(secureTexts);
   } catch (err) {
@@ -97,7 +100,7 @@ searchItems = async (req, res) => {
 
 updateSecureTextById = async (req, res) => {
   const { id } = req.params;
-  const { title, text } = req.body;
+  const { title, text, category } = req.body;
   let iv = null;
   let encrypted = null;
 
@@ -115,6 +118,7 @@ updateSecureTextById = async (req, res) => {
         $set: {
           title,
           text: encrypted ?? previousSecuretext.text,
+          category,
           iv : iv ?? previousSecuretext.iv,
         },
       },
