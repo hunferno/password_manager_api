@@ -89,6 +89,13 @@ searchItems = async (req, res) => {
       return;
     }
 
+    identifications.map((identification) => {
+      identification.password = decrypt(
+        identification.password,
+        identification.iv
+      );
+    });
+
     res.status(200).json(identifications);
   } catch (err) {
     res.status(500).json({
